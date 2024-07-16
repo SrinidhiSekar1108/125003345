@@ -4,60 +4,64 @@ import threading
 
 app = Flask(__name__)
 
-window_size = 10
+# Configuration
+WINDOW_SIZE = 10
 number_store = []
 lock = threading.Lock()
 
-def fetch_numbers(url):
+# Function to fetch numbers from a given URL
+def fetch_numbers_from_url(url):
     try:
         response = requests.get(url, timeout=0.5)
         if response.status_code == 200:
             return response.json().get("numbers", [])
     except requests.exceptions.RequestException:
-        pass
+        return []
     return []
 
-def get_url(number_id):
-    if number_id == 'p':
-        return "http://20.244.56.144/test/prime"
-    elif number_id == 'f':
-        return "http://20.244.56.144/test/fibo"
-    elif number_id == 'e':
-        return "http://20.244.56.144/test/even"
-    elif number_id == 'r':
-        return "http://20.244.56.144/test/rand"
-    else:
-        return None
+# Function to get URL based on number ID
+def construct_url(number_id):
+    base_url = "http://20.244.56.144/test/"
+    endpoints = {
+        'p': 'prime',
+        'f': 'fibo',
+        'e': 'even',
+        'r': 'rand'
+    }
+    return base_url + endpoints.get(number_id, '')
 
-def update_store(new_numbers):
+# Function to update the number store with new numbers
+def update_number_store(new_numbers):
     with lock:
         for num in new_numbers:
             if num not in number_store:
                 number_store.append(num)
-        while len(number_store) > window_size:
+        while len(number_store) > WINDOW_SIZE:
             number_store.pop(0)
 
+# Function to calculate the average of the numbers in the store
 def calculate_average(numbers):
-    if len(numbers) == 0:
+    if not numbers:
         return 0
     return sum(numbers) / len(numbers)
 
+# Route to handle fetching numbers based on the number ID
 @app.route('/numbers/<number_id>', methods=['GET'])
-def get_numbers(number_id):
-    url = get_url(number_id)
-    if url is None:
+def fetch_numbers(number_id):
+    url = construct_url(number_id)
+    if not url:
         return jsonify({"error": "Invalid number ID"}), 400
 
-    prev_state = list(number_store)
-    new_numbers = fetch_numbers(url)
-    update_store(new_numbers)
+    previous_state = list(number_store)
+    new_numbers = fetch_numbers_from_url(url)
+    update_number_store(new_numbers)
 
-    avg = calculate_average(number_store)
+    average = calculate_average(number_store)
     return jsonify({
-        "windowPrevState": prev_state,
-        "windowCurrState": list(number_store),
-        "numbers": new_numbers,
-        "avg": avg
+        "previousState": previous_state,
+        "currentState": list(number_store),
+        "fetchedNumbers": new_numbers,
+        "average": average
     })
 
 if __name__ == '__main__':
